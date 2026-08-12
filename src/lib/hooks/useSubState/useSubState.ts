@@ -1,5 +1,5 @@
 import { useCallback, useRef } from "react";
-import { StateObserver } from "./StateObserver";
+import { Middleware, StateObserver } from "./StateObserver";
 
 export interface SubState<T> {
   stateObserver: React.MutableRefObject<StateObserver<T>>;
@@ -9,6 +9,7 @@ export interface SubState<T> {
   ) => void;
   setState: <K extends keyof T>(newState: T | Pick<T, K>) => void;
   getState: () => T;
+  addMiddleware: (fn: Middleware<T>) => () => void;
 }
 
 export function useSubStateBase<T>(observer: StateObserver<T>): SubState<T> {
@@ -31,14 +32,19 @@ export function useSubStateBase<T>(observer: StateObserver<T>): SubState<T> {
     return refSub.current.state;
   }, []);
 
+  const addMiddleware = useCallback((fn: Middleware<T>) => {
+    return refSub.current.addMiddleware(fn);
+  }, []);
+
   return {
     stateObserver: refSub,
     setState,
     setKeyState,
     getState,
+    addMiddleware,
   };
 }
 
-export function useSubState<T>(initialState: T): SubState<T> {
-  return useSubStateBase(new StateObserver<T>(initialState));
+export function useSubState<T>(initialState: T, middlewares?: Middleware<T>[]): SubState<T> {
+  return useSubStateBase(new StateObserver<T>(initialState, middlewares));
 }

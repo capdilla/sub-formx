@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo } from "react";
 
+import { Middleware } from "../useSubState/StateObserver";
 import { SubState, useSubState } from "../useSubState/useSubState";
 import { Field, FormState, ValidationResult } from "../../interfaces/Field";
 
@@ -14,9 +15,10 @@ export interface FormProps<T> {
   defaultState: T;
   onFormChange?: (
     formState: FormState<T>,
-    formObserver: SubState<FormState<T>>
+    formObserver: SubState<FormState<T>>,
   ) => void;
   fields: Field<T>[];
+  middleware?: Middleware<FormState<T>>[];
 }
 
 export type FormCore<T> = SubState<FormState<T>>;
@@ -37,7 +39,7 @@ interface ValidateFieldOptions {
 const validateField = <T>(
   field: Field<T>,
   formState: FormState<T>,
-  options?: ValidateFieldOptions
+  options?: ValidateFieldOptions,
 ): ValidationResult => {
   const validation = field.validation;
   if (validation?.required) {
@@ -67,22 +69,25 @@ const validateField = <T>(
 
 const createDefaultState = <T>(
   fields: FormProps<T>["fields"],
-  defaultState?: Partial<T>
+  defaultState?: Partial<T>,
 ): FormState<T> => {
   if (!defaultState) {
     return {} as FormState<T>;
   }
 
-  const indexedFields = fields.reduce((acc, field) => {
-    acc[field.name as string] = field;
+  const indexedFields = fields.reduce(
+    (acc, field) => {
+      acc[field.name as string] = field;
 
-    // add at default value if not present
-    if (!(field.name in defaultState)) {
-      defaultState[field.name] = "" as T[keyof T];
-    }
+      // add at default value if not present
+      if (!(field.name in defaultState)) {
+        defaultState[field.name] = "" as T[keyof T];
+      }
 
-    return acc;
-  }, {} as Record<string, Field<T>>);
+      return acc;
+    },
+    {} as Record<string, Field<T>>,
+  );
 
   const state = Object.entries(defaultState).reduce((acc, [key, value]) => {
     acc[key as keyof T] = {
@@ -113,7 +118,8 @@ const createDefaultState = <T>(
 
 export function useForm<T>(props: FormProps<T>): UseFormValue<T> {
   const formState = useSubState<FormState<T>>(
-    createDefaultState(props.fields, props.defaultState)
+    createDefaultState(props.fields, props.defaultState),
+    props.middleware,
   );
 
   useEffect(() => {
@@ -125,7 +131,7 @@ export function useForm<T>(props: FormProps<T>): UseFormValue<T> {
         if (props.onFormChange) {
           props.onFormChange(newState, formState);
         }
-      }
+      },
     );
 
     return () => {
@@ -150,31 +156,34 @@ export function useForm<T>(props: FormProps<T>): UseFormValue<T> {
         validation,
       });
     },
-    [formState]
+    [formState],
   );
 
   const fields = useMemo(() => {
     // recreate state if fields change
     formState.stateObserver.current.setState(
-      createDefaultState(props.fields, props.defaultState)
+      createDefaultState(props.fields, props.defaultState),
     );
 
-    return props.fields.reduce((acc, field) => {
-      acc[field.name] = {
-        ...field,
-        componentProps: {
-          ...field.componentProps,
-          onChange: (value: unknown) => {
-            onFieldChange(field, value);
+    return props.fields.reduce(
+      (acc, field) => {
+        acc[field.name] = {
+          ...field,
+          componentProps: {
+            ...field.componentProps,
+            onChange: (value: unknown) => {
+              onFieldChange(field, value);
+            },
+            value: {
+              key: field.name,
+              stateObserver: formState.stateObserver.current,
+            },
           },
-          value: {
-            key: field.name,
-            stateObserver: formState.stateObserver.current,
-          },
-        },
-      };
-      return acc;
-    }, {} as Record<keyof T, Field<T>>);
+        };
+        return acc;
+      },
+      {} as Record<keyof T, Field<T>>,
+    );
   }, [formState, onFieldChange, props.fields, props.defaultState]);
 
   const getEntries = useCallback(() => {
@@ -187,7 +196,7 @@ export function useForm<T>(props: FormProps<T>): UseFormValue<T> {
 
   const isFormValid = useCallback(
     () => getEntries().every(([, field]) => field.validation?.isValid),
-    [getEntries]
+    [getEntries],
   );
 
   return {
@@ -210,7 +219,7 @@ export function useForm<T>(props: FormProps<T>): UseFormValue<T> {
     },
     updateFormState: (newState) =>
       formState.stateObserver.current.setState(
-        createDefaultState(props.fields, newState as T)
+        createDefaultState(props.fields, newState as T),
       ),
     setShowValidation: (showValidation) => {
       const newState = getEntries().reduce((acc, [key, value]) => {
@@ -235,7 +244,7 @@ export function useForm<T>(props: FormProps<T>): UseFormValue<T> {
           validation: validateField(
             field,
             formState.stateObserver.current.state,
-            options
+            options,
           ),
         };
 

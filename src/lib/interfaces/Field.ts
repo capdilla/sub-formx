@@ -8,7 +8,7 @@ type ComponentProps<C> = {
   onChange: (value: unknown) => void;
   value: Value<unknown>;
 } & React.ComponentPropsWithRef<
-  React.ComponentType<C> | keyof JSX.IntrinsicElements
+  React.ComponentType<C> | keyof React.JSX.IntrinsicElements
 >;
 
 export interface ValidationResult {
